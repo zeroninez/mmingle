@@ -1,0 +1,283 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  div {
+    white-space: pre-wrap;
+  }
+
+  :root {
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+  }
+
+  input,
+  textarea {
+    appearance: none;
+    -webkit-appearance: none;
+    -webkit-border-radius: 0;
+  }
+
+  input:focus,
+  textarea:focus {
+    outline: none;
+  }
+
+  select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    /*화살표 배경 넣기*/
+    /* background: #fff url('이미지경로') no-repeat 98% center; */
+  }
+
+  select::-ms-expand {
+    /* 화살표 없애기 for IE10, 11*/
+    display: none;
+  }
+
+  #__next,
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    /* 16px */
+    font-size: 100%;
+    width: 100vw;
+    height: 100dvh;
+
+
+    @media all and (display-mode: standalone) {
+      height: 100vh;
+    }
+  }
+
+  canvas {
+    touch-action: none;
+  }
+
+  .no-pointer-events {
+    pointer-events: none;
+  }
+
+  /* ( 크롬, 사파리, 오페라, 엣지 ) 동작 */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scroll-bar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+
+  .no-scroll-bar::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera*/
+  }
+
+  .checking {
+    /*  border border-red-500 border-dashed */
+    border: 1px solid red;
+    border-style: dashed;
+  }
+
+  svg.dna-wrapper circle:nth-child(odd) {
+    fill: rgba(163, 230, 53, 0.7) !important;
+  }
+
+  svg.dna-wrapper circle:nth-child(even) {
+    fill: rgba(163, 230, 53, 0.7) !important;
+  }
+
+  .loader {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 6rem;
+    margin-top: 3rem;
+    margin-bottom: 3rem;
+  }
+
+  .loader:before,
+  .loader:after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    animation: pulsOut 1.8s ease-in-out infinite;
+    filter: drop-shadow(0 0 1rem rgba(163, 230, 53, 0.75));
+  }
+
+  .loader:before {
+    width: 100%;
+    padding-bottom: 100%;
+    box-shadow: inset 0 0 0 1rem rgb(163, 230, 53);
+    animation-name: pulsIn;
+  }
+
+  .loader:after {
+    width: calc(100% - 2rem);
+    padding-bottom: calc(100% - 2rem);
+    box-shadow: 0 0 0 0 rgb(163, 230, 53);
+  }
+
+  .gradient-blur {
+    inset: auto 0 0 0;
+    width: 100%;
+    height: 100dvh;
+    pointer-events: none;
+  }
+
+  .gradient-blur>div,
+  .gradient-blur::before,
+  .gradient-blur::after {
+    position: absolute;
+    inset: 0;
+  }
+
+  .gradient-blur::before {
+    content: '';
+    z-index: 1;
+    -webkit-backdrop-filter: blur(0px);
+    backdrop-filter: blur(0px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 5%, black 12.5%, black 25%, rgba(0, 0, 0, 0) 37.5%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, black 12.5%, black 25%, rgba(0, 0, 0, 0) 37.5%);
+  }
+
+  .gradient-blur>div:nth-of-type(1) {
+    z-index: 2;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 12.5%, black 25%, black 37.5%, rgba(0, 0, 0, 0) 50%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 12.5%, black 25%, black 37.5%, rgba(0, 0, 0, 0) 50%);
+  }
+
+  .gradient-blur>div:nth-of-type(2) {
+    z-index: 3;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 25%, black 37.5%, black 50%, rgba(0, 0, 0, 0) 62.5%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 25%, black 37.5%, black 50%, rgba(0, 0, 0, 0) 62.5%);
+  }
+
+  .gradient-blur>div:nth-of-type(3) {
+    z-index: 4;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 37.5%, black 50%, black 62.5%, rgba(0, 0, 0, 0) 75%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 37.5%, black 50%, black 62.5%, rgba(0, 0, 0, 0) 75%);
+  }
+
+  .gradient-blur>div:nth-of-type(4) {
+    z-index: 5;
+    -webkit-backdrop-filter: blur(32px);
+    backdrop-filter: blur(32px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 50%, black 62.5%, black 75%, rgba(0, 0, 0, 0) 87.5%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 50%, black 62.5%, black 75%, rgba(0, 0, 0, 0) 87.5%);
+  }
+
+  .gradient-blur>div:nth-of-type(5) {
+    z-index: 6;
+    -webkit-backdrop-filter: blur(64px);
+    backdrop-filter: blur(64px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 62.5%, black 75%, black 87.5%, rgba(0, 0, 0, 0) 100%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 62.5%, black 75%, black 87.5%, rgba(0, 0, 0, 0) 100%);
+  }
+
+  .gradient-blur>div:nth-of-type(6) {
+    z-index: 7;
+    -webkit-backdrop-filter: blur(64px);
+    backdrop-filter: blur(64px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 75%, black 87.5%, black 100%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 75%, black 87.5%, black 100%);
+  }
+
+  .gradient-blur::after {
+    content: '';
+    z-index: 8;
+    -webkit-backdrop-filter: blur(64px);
+    backdrop-filter: blur(64px);
+    -webkit-mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 87.5%, black 100%);
+    mask: linear-gradient(to bottom, rgba(0, 0, 0, 0) 87.5%, black 100%);
+  }
+
+  @keyframes pulsIn {
+    0% {
+      box-shadow: inset 0 0 0 1rem rgb(163, 230, 53);
+      opacity: 1;
+    }
+
+    50%,
+    100% {
+      box-shadow: inset 0 0 0 0 rgb(163, 230, 53);
+      opacity: 0;
+    }
+  }
+
+  @keyframes pulsOut {
+
+    0%,
+    50% {
+      box-shadow: 0 0 0 0 rgb(163, 230, 53);
+      opacity: 0;
+    }
+
+    100% {
+      box-shadow: 0 0 0 1rem rgb(163, 230, 53);
+      opacity: 1;
+    }
+  }
+
+  /* 타이핑 애니메이션 CSS - app/styles/typing-animation.css 또는 globals.css에 추가 */
+
+  .typing-indicator {
+    display: flex;
+    align-items: center;
+  }
+
+  .typing-indicator span {
+    height: 8px;
+    width: 8px;
+    margin: 0 1px;
+    background-color: #9CA3AF;
+    border-radius: 50%;
+    display: inline-block;
+    opacity: 0.4;
+  }
+
+  .typing-indicator span:nth-child(1) {
+    animation: typing 1.5s infinite;
+  }
+
+  .typing-indicator span:nth-child(2) {
+    animation: typing 1.5s infinite 0.3s;
+  }
+
+  .typing-indicator span:nth-child(3) {
+    animation: typing 1.5s infinite 0.6s;
+  }
+
+  @keyframes typing {
+
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+
+    50% {
+      transform: translateY(-5px);
+      opacity: 0.8;
+    }
+  }
+}
