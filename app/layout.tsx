@@ -85,7 +85,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <body className={`${pretendard}`}>
         <Layout>{children}</Layout>
         <GoogleTagManager gtmId={process.env.NEXT_PUBLIC_GTM_ID} />

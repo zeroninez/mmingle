@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 export const Layout = ({ children }) => {
   const ref = useRef(null);
 
   return (
-    <>
+    <AuthProvider>
       <div
         ref={ref}
         style={{
@@ -18,6 +19,6 @@ export const Layout = ({ children }) => {
       >
         {children}
       </div>
-    </>
+    </AuthProvider>
   );
 };
