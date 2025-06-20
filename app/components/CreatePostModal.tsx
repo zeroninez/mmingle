@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { useDropzone } from "react-dropzone";
 import { X, Upload, MapPin, Loader2 } from "lucide-react";
@@ -41,15 +41,15 @@ export function CreatePostModal({
       }
     } catch (error) {
       console.error("위치명 가져오기 실패:", error);
+      setLocationName(`${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`);
     }
   }, [location]);
 
-  // 모달이 열릴 때 위치명 가져오기
-  useState(() => {
+  // 모달이 열릴 때 위치명 가져오기 (useEffect로 수정)
+  useEffect(() => {
     if (isOpen) {
       getLocationName();
     }
-    //@ts-ignore
   }, [isOpen, getLocationName]);
 
   // 이미지 드롭존
@@ -87,24 +87,50 @@ export function CreatePostModal({
       const fileExt = file.name.split(".").pop();
       const fileName = `${postId}/${Date.now()}_${index}.${fileExt}`;
 
-      const { data, error } = await supabase.storage
-        .from("post-images")
-        .upload(fileName, file);
+      try {
+        // 1. Storage에 파일 업로드
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("post-images")
+          .upload(fileName, file, {
+            cacheControl: "3600",
+            upsert: false,
+          });
 
-      if (error) throw error;
+        if (uploadError) {
+          console.error("Storage 업로드 실패:", uploadError);
+          throw uploadError;
+        }
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("post-images").getPublicUrl(fileName);
+        console.log("Storage 업로드 성공:", uploadData);
 
-      // 이미지 정보를 DB에 저장
-      await supabase.from("post_images").insert({
-        post_id: postId,
-        image_url: publicUrl,
-        image_order: index,
-      });
+        // 2. 공개 URL 가져오기
+        const { data: urlData } = supabase.storage
+          .from("post-images")
+          .getPublicUrl(fileName);
 
-      return publicUrl;
+        const publicUrl = urlData.publicUrl;
+        console.log("Public URL 생성:", publicUrl);
+
+        // 3. 이미지 정보를 DB에 저장
+        const { error: insertError } = await supabase
+          .from("post_images")
+          .insert({
+            post_id: postId,
+            image_url: publicUrl,
+            image_order: index,
+          });
+
+        if (insertError) {
+          console.error("이미지 DB 저장 실패:", insertError);
+          throw insertError;
+        }
+
+        console.log("이미지 DB 저장 완료:", index);
+        return publicUrl;
+      } catch (error) {
+        console.error(`이미지 ${index} 업로드 중 에러:`, error);
+        throw error;
+      }
     });
 
     return Promise.all(uploadPromises);
@@ -113,10 +139,20 @@ export function CreatePostModal({
   // 포스트 작성
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !content.trim()) return;
+    if (!user || !content.trim()) {
+      alert("내용을 입력해주세요.");
+      return;
+    }
 
     setLoading(true);
     try {
+      console.log("포스트 작성 시작:", {
+        user_id: user.id,
+        content: content.trim(),
+        location,
+        locationName,
+      });
+
       // 포스트 생성
       const { data: postData, error: postError } = await supabase
         .from("posts")
@@ -130,19 +166,51 @@ export function CreatePostModal({
         .select()
         .single();
 
-      if (postError) throw postError;
+      if (postError) {
+        console.error("포스트 생성 실패:", postError);
+        throw postError;
+      }
 
-      // 이미지 업로드
+      console.log("포스트 생성 성공:", postData);
+
+      // 이미지 업로드 (실패해도 포스트는 유지)
       if (images.length > 0) {
-        await uploadImages(postData.id);
+        console.log("이미지 업로드 시작:", images.length, "개");
+        try {
+          await uploadImages(postData.id);
+          console.log("이미지 업로드 완료");
+          alert("포스트가 성공적으로 작성되었습니다!");
+        } catch (imageError) {
+          console.error("이미지 업로드 실패:", imageError);
+          // 이미지 업로드가 실패해도 포스트는 생성되었으므로 계속 진행
+          alert(
+            "포스트는 생성되었지만 이미지 업로드에 실패했습니다.\n\n가능한 원인:\n• Supabase Storage 설정 문제\n• 파일 크기가 너무 큼\n• 네트워크 연결 문제\n\n텍스트 포스트는 정상적으로 작성되었습니다.",
+          );
+        }
+      } else {
+        alert("포스트가 성공적으로 작성되었습니다!");
       }
 
       // 성공 처리
+      console.log("포스트 작성 완료");
       onPostCreated?.();
       handleClose();
-    } catch (error) {
+      alert("포스트가 성공적으로 작성되었습니다!");
+    } catch (error: any) {
       console.error("포스트 작성 실패:", error);
-      alert("포스트 작성에 실패했습니다.");
+
+      // 더 구체적인 에러 메시지
+      let errorMessage = "포스트 작성에 실패했습니다.";
+
+      if (error?.code === "23505") {
+        errorMessage = "중복된 데이터가 있습니다.";
+      } else if (error?.code === "42501") {
+        errorMessage = "권한이 없습니다. 로그인 상태를 확인해주세요.";
+      } else if (error?.message) {
+        errorMessage = `오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -164,11 +232,12 @@ export function CreatePostModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-hidden">
         {/* 헤더 */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">새 포스트 작성</h2>
+        <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-lime-400 to-lime-600">
+          <h2 className="text-lg font-semibold text-white">새 포스트 작성</h2>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            className="p-2 hover:bg-white/20 rounded-full text-white"
+            disabled={loading}
           >
             <X className="w-5 h-5" />
           </button>
@@ -179,15 +248,21 @@ export function CreatePostModal({
           <div className="p-4 space-y-4 flex-1 overflow-y-auto">
             {/* 사용자 정보 */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0">
-                {user?.avatar_url && (
+              <div className="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0 overflow-hidden">
+                {user?.avatar_url ? (
                   <Image
                     src={user.avatar_url}
                     alt={user.display_name || user.username}
                     width={40}
                     height={40}
-                    className="rounded-full"
+                    className="w-full h-full object-cover"
                   />
+                ) : (
+                  <div className="w-full h-full bg-lime-100 flex items-center justify-center text-lime-600 font-semibold">
+                    {(user?.display_name || user?.username)
+                      ?.charAt(0)
+                      .toUpperCase()}
+                  </div>
                 )}
               </div>
               <div>
@@ -205,10 +280,15 @@ export function CreatePostModal({
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="무슨 일이 일어나고 있나요?"
-              className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="이 곳에서 무슨 일이 일어나고 있나요?"
+              className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
               maxLength={500}
+              disabled={loading}
+              required
             />
+            <div className="text-right text-sm text-gray-400">
+              {content.length}/500
+            </div>
 
             {/* 이미지 업로드 */}
             <div>
@@ -216,18 +296,17 @@ export function CreatePostModal({
                 {...getRootProps()}
                 className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
                   isDragActive
-                    ? "border-primary-500 bg-primary-50"
-                    : "border-gray-300 hover:border-gray-400"
-                }`}
+                    ? "border-lime-400 bg-lime-50"
+                    : "border-gray-300 hover:border-lime-400 hover:bg-lime-50"
+                } ${loading ? "pointer-events-none opacity-50" : ""}`}
               >
-                <input {...getInputProps()} />
+                <input {...getInputProps()} disabled={loading} />
                 <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                 <p className="text-sm text-gray-600">
                   {isDragActive
-                    ? "이미지를 여기에 드롭하세요"
-                    : "이미지를 드래그하거나 클릭해서 업로드하세요"}
+                    ? "이미지를 여기에 놓으세요"
+                    : "이미지를 드래그하거나 클릭해서 업로드 (최대 5개)"}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">최대 5개까지 가능</p>
               </div>
 
               {/* 이미지 미리보기 */}
@@ -237,52 +316,51 @@ export function CreatePostModal({
                     <div key={index} className="relative">
                       <Image
                         src={url}
-                        alt={`Preview ${index + 1}`}
+                        alt={`미리보기 ${index + 1}`}
                         width={100}
                         height={100}
-                        className="rounded-lg object-cover"
+                        className="w-full h-20 object-cover rounded-lg"
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      {!loading && (
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
-            {/* 위치명 수정 */}
-            <input
-              type="text"
-              value={locationName}
-              onChange={(e) => setLocationName(e.target.value)}
-              placeholder="위치명을 입력하세요"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
           </div>
 
-          {/* 푸터 */}
-          <div className="p-4 border-t flex justify-between items-center">
-            <div className="text-sm text-gray-500">{content.length}/500</div>
-            <div className="flex gap-2">
+          {/* 하단 버튼 */}
+          <div className="p-4 border-t bg-gray-50">
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50"
+                disabled={loading}
               >
                 취소
               </button>
               <button
                 type="submit"
-                disabled={!content.trim() || loading}
-                className="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={loading || !content.trim()}
+                className="flex-1 px-4 py-2 bg-lime-500 text-white rounded-lg font-medium hover:bg-lime-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {loading ? "게시 중..." : "게시하기"}
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    작성 중...
+                  </>
+                ) : (
+                  "포스트 작성"
+                )}
               </button>
             </div>
           </div>

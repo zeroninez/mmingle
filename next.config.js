@@ -20,6 +20,20 @@ const nextConfig = {
         port: "",
         pathname: "/**",
       },
+      // Supabase Storage 도메인 추가
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        port: "",
+        pathname: "/storage/v1/object/public/**",
+      },
+      // 특정 Supabase 프로젝트 도메인 (더 구체적)
+      {
+        protocol: "https",
+        hostname: "jmtlkiaztwvjvvuetubw.supabase.co",
+        port: "",
+        pathname: "/**",
+      },
     ],
   },
   // compiler: {
@@ -102,7 +116,7 @@ module.exports = (_phase, { defaultConfig }) => {
     {
       ...defaultConfig,
       ...nextConfig,
-    }
+    },
   );
 
   const finalConfig = {};
