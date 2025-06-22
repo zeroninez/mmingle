@@ -1,25 +1,93 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Heart, MessageCircle, MapPin, MoreHorizontal } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  MapPin,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
 import { supabase, Post } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { PostManagementModal } from "./PostManagementModal";
+import {
+  createLikeNotification,
+  createCommentNotification,
+} from "@/lib/notifications";
+import { renderTextWithHashtags } from "./HashtagSystem";
+
+interface Comment {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+  post_id: string;
+  user: {
+    id: string;
+    username: string;
+    display_name: string;
+    avatar_url?: string;
+  };
+}
 
 interface PostCardProps {
   post: Post;
   onUpdate?: () => void;
   compact?: boolean;
+  onHashtagClick?: (hashtag: string) => void; // 해시태그 클릭 핸들러 추가
 }
 
-export function PostCard({ post, onUpdate, compact = false }: PostCardProps) {
+export function PostCard({
+  post,
+  onUpdate,
+  compact = false,
+  onHashtagClick,
+}: PostCardProps) {
   const { user } = useAuth();
   const [isLiking, setIsLiking] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isCommenting, setIsCommenting] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [showManagementModal, setShowManagementModal] = useState(false);
+
+  // 댓글 목록 불러오기
+  const loadComments = async () => {
+    if (!showComments) return;
+
+    setLoadingComments(true);
+    try {
+      const { data: commentsData, error } = await supabase
+        .from("comments")
+        .select(
+          `
+          *,
+          user:users(id, username, display_name, avatar_url)
+        `,
+        )
+        .eq("post_id", post.id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+      setComments(commentsData || []);
+    } catch (error) {
+      console.error("댓글 로드 실패:", error);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  // 댓글 섹션 토글 시 댓글 로드
+  useEffect(() => {
+    if (showComments) {
+      loadComments();
+    }
+  }, [showComments, post.id]);
 
   // 좋아요 토글
   const toggleLike = async () => {
@@ -44,6 +112,16 @@ export function PostCard({ post, onUpdate, compact = false }: PostCardProps) {
         });
 
         if (error) throw error;
+
+        // 좋아요 알림 생성 (포스트 작성자에게)
+        if (post.user_id !== user.id) {
+          await createLikeNotification(
+            post.user_id,
+            user.id,
+            post.id,
+            user.display_name || user.username,
+          );
+        }
       }
 
       // 포스트 업데이트
@@ -71,12 +149,53 @@ export function PostCard({ post, onUpdate, compact = false }: PostCardProps) {
       if (error) throw error;
 
       setNewComment("");
+
+      // 댓글 목록 다시 로드
+      await loadComments();
+
+      // 댓글 알림 생성 (포스트 작성자에게)
+      if (post.user_id !== user.id) {
+        await createCommentNotification(
+          post.user_id,
+          user.id,
+          post.id,
+          user.display_name || user.username,
+        );
+      }
+
+      // 포스트 업데이트 (댓글 수 반영)
       onUpdate?.();
     } catch (error) {
       console.error("댓글 작성 실패:", error);
       alert("댓글 작성에 실패했습니다.");
     } finally {
       setIsCommenting(false);
+    }
+  };
+
+  // 댓글 삭제
+  const deleteComment = async (commentId: string) => {
+    if (!user) return;
+
+    if (!confirm("댓글을 삭제하시겠습니까?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", commentId)
+        .eq("user_id", user.id); // 자신의 댓글만 삭제 가능
+
+      if (error) throw error;
+
+      // 댓글 목록 다시 로드
+      await loadComments();
+
+      // 포스트 업데이트 (댓글 수 반영)
+      onUpdate?.();
+    } catch (error) {
+      console.error("댓글 삭제 실패:", error);
+      alert("댓글 삭제에 실패했습니다.");
     }
   };
 
@@ -112,37 +231,52 @@ export function PostCard({ post, onUpdate, compact = false }: PostCardProps) {
             )}
           </div>
           <div>
-            <p className={`font-medium ${compact ? "text-sm" : ""}`}>
-              {post.user?.display_name || post.user?.username}
-            </p>
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <MapPin className="w-3 h-3" />
-              <span>
-                {post.location_name ||
-                  `${post.latitude.toFixed(4)}, ${post.longitude.toFixed(4)}`}
-              </span>
-              <span>•</span>
-              <span>{timeAgo}</span>
+            <div className={`font-semibold ${compact ? "text-sm" : ""}`}>
+              {post.user?.display_name || "사용자"}
+            </div>
+            <div className={`text-gray-500 ${compact ? "text-xs" : "text-sm"}`}>
+              @{post.user?.username} · {timeAgo}
             </div>
           </div>
         </div>
-
-        {!compact && (
-          <button className="p-2 hover:bg-gray-100 rounded-full">
-            <MoreHorizontal className="w-4 h-4 text-gray-400" />
+        {!compact && user && post.user_id === user.id && (
+          <button
+            onClick={() => setShowManagementModal(true)}
+            className="p-2 hover:bg-gray-100 rounded-full"
+            title="포스트 관리"
+          >
+            <MoreHorizontal className="w-4 h-4 text-gray-500" />
           </button>
         )}
       </div>
 
-      {/* 포스트 내용 */}
-      <div className={`${compact ? "text-sm" : ""}`}>
-        <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
-      </div>
+      {/* 위치 정보 */}
+      {post.location_name && (
+        <div className="flex items-center gap-2 text-gray-600">
+          <MapPin className={`${compact ? "w-3 h-3" : "w-4 h-4"}`} />
+          <span className={`${compact ? "text-xs" : "text-sm"}`}>
+            {post.location_name}
+          </span>
+        </div>
+      )}
 
-      {/* 이미지 갤러리 */}
+      {/* 포스트 내용 (해시태그 렌더링 포함) */}
+      {post.content && (
+        <div className={compact ? "text-sm" : ""}>
+          <div className="whitespace-pre-wrap">
+            {renderTextWithHashtags(post.content, onHashtagClick)}
+          </div>
+        </div>
+      )}
+
+      {/* 이미지들 */}
       {post.images && post.images.length > 0 && (
         <div
-          className={`${post.images.length === 1 ? "" : "grid grid-cols-2 gap-2"}`}
+          className={`${
+            post.images.length === 1
+              ? "grid grid-cols-1"
+              : "grid grid-cols-2 gap-2"
+          }`}
         >
           {post.images
             .sort((a, b) => a.image_order - b.image_order)
@@ -253,10 +387,72 @@ export function PostCard({ post, onUpdate, compact = false }: PostCardProps) {
           )}
 
           {/* 댓글 목록 */}
-          <div className="space-y-2">
-            <p className="text-sm text-gray-500">
-              댓글 목록은 추후 구현 예정입니다.
-            </p>
+          <div className="space-y-3">
+            {loadingComments ? (
+              <div className="text-center py-4">
+                <div className="text-sm text-gray-500">
+                  댓글을 불러오는 중...
+                </div>
+              </div>
+            ) : comments.length > 0 ? (
+              comments.map((comment) => (
+                <div key={comment.id} className="flex gap-3">
+                  <div className="w-8 h-8 bg-gray-300 rounded-full flex-shrink-0 overflow-hidden">
+                    {comment.user?.avatar_url ? (
+                      <Image
+                        src={comment.user.avatar_url}
+                        alt={comment.user.display_name || comment.user.username}
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-600 font-semibold text-xs">
+                        {(comment.user?.display_name || comment.user?.username)
+                          ?.charAt(0)
+                          .toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="bg-gray-50 rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-semibold text-sm">
+                          {comment.user?.display_name || "사용자"}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">
+                            {formatDistanceToNow(new Date(comment.created_at), {
+                              addSuffix: true,
+                              locale: ko,
+                            })}
+                          </span>
+                          {/* 자신의 댓글인 경우 삭제 버튼 표시 */}
+                          {user && comment.user_id === user.id && (
+                            <button
+                              onClick={() => deleteComment(comment.id)}
+                              className="text-gray-400 hover:text-red-500 transition-colors"
+                              title="댓글 삭제"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {comment.content}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4">
+                <div className="text-sm text-gray-500">
+                  아직 댓글이 없습니다. 첫 번째 댓글을 남겨보세요!
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -291,6 +487,21 @@ export function PostCard({ post, onUpdate, compact = false }: PostCardProps) {
           </button>
         </div>
       )}
+
+      {/* 포스트 관리 모달 */}
+      <PostManagementModal
+        isOpen={showManagementModal}
+        onClose={() => setShowManagementModal(false)}
+        post={post}
+        onPostUpdated={() => {
+          setShowManagementModal(false);
+          onUpdate?.();
+        }}
+        onPostDeleted={() => {
+          setShowManagementModal(false);
+          onUpdate?.();
+        }}
+      />
     </div>
   );
 }

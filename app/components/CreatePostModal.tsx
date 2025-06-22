@@ -6,6 +6,7 @@ import { useDropzone } from "react-dropzone";
 import { X, Upload, MapPin, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { HashtagInput, savePostHashtags } from "./HashtagSystem";
 
 interface CreatePostModalProps {
   isOpen: boolean;
@@ -45,7 +46,7 @@ export function CreatePostModal({
     }
   }, [location]);
 
-  // 모달이 열릴 때 위치명 가져오기 (useEffect로 수정)
+  // 모달이 열릴 때 위치명 가져오기
   useEffect(() => {
     if (isOpen) {
       getLocationName();
@@ -173,22 +174,25 @@ export function CreatePostModal({
 
       console.log("포스트 생성 성공:", postData);
 
+      // 해시태그 저장
+      try {
+        await savePostHashtags(postData.id, content);
+        console.log("해시태그 저장 완료");
+      } catch (hashtagError) {
+        console.error("해시태그 저장 실패:", hashtagError);
+        // 해시태그 저장 실패해도 포스트는 유지
+      }
+
       // 이미지 업로드 (실패해도 포스트는 유지)
       if (images.length > 0) {
         console.log("이미지 업로드 시작:", images.length, "개");
         try {
           await uploadImages(postData.id);
           console.log("이미지 업로드 완료");
-          alert("포스트가 성공적으로 작성되었습니다!");
         } catch (imageError) {
           console.error("이미지 업로드 실패:", imageError);
           // 이미지 업로드가 실패해도 포스트는 생성되었으므로 계속 진행
-          alert(
-            "포스트는 생성되었지만 이미지 업로드에 실패했습니다.\n\n가능한 원인:\n• Supabase Storage 설정 문제\n• 파일 크기가 너무 큼\n• 네트워크 연결 문제\n\n텍스트 포스트는 정상적으로 작성되었습니다.",
-          );
         }
-      } else {
-        alert("포스트가 성공적으로 작성되었습니다!");
       }
 
       // 성공 처리
@@ -276,18 +280,17 @@ export function CreatePostModal({
               </div>
             </div>
 
-            {/* 내용 입력 */}
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="이 곳에서 무슨 일이 일어나고 있나요?"
-              className="w-full min-h-[120px] p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
-              maxLength={500}
-              disabled={loading}
-              required
-            />
-            <div className="text-right text-sm text-gray-400">
-              {content.length}/500
+            {/* 해시태그 지원 내용 입력 */}
+            <div>
+              <HashtagInput
+                value={content}
+                onChange={setContent}
+                placeholder="이 곳에서 무슨 일이 일어나고 있나요? #해시태그를 사용해보세요!"
+                className="min-h-[120px]"
+              />
+              <div className="text-right text-sm text-gray-400 mt-1">
+                {content.length}/500
+              </div>
             </div>
 
             {/* 이미지 업로드 */}
