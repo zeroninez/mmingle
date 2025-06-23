@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
+import { OptimizedImage } from "./OptimizedImage";
 import {
   User,
   Edit3,
@@ -269,12 +269,13 @@ export function UserProfile({ userId, onClose }: UserProfileProps) {
           <div className="relative">
             <div className="w-24 h-24 bg-gray-300 rounded-full overflow-hidden">
               {currentUser.avatar_url ? (
-                <Image
+                <OptimizedImage
                   src={currentUser.avatar_url}
                   alt={currentUser.display_name || currentUser.username}
                   width={96}
                   height={96}
                   className="w-full h-full object-cover"
+                  priority={true}
                 />
               ) : (
                 <div className="w-full h-full bg-lime-100 flex items-center justify-center text-lime-600 font-bold text-2xl">

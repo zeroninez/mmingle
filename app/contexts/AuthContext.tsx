@@ -1,3 +1,4 @@
+// contexts/AuthContext.tsx
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
@@ -22,54 +23,131 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // username을 이메일 형태로 변환하는 함수
 const usernameToEmail = (username: string) => `${username}@app.local`;
 
-// 이메일에서 username 추출하는 함수
-const emailToUsername = (email: string) => email.replace("@app.local", "");
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 현재 사용자 상태 확인
-    const getUser = async () => {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
-      if (authUser) {
-        // users 테이블에서 추가 정보 가져오기
-        const { data: userData } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
-
-        setUser(userData);
-      }
-      setLoading(false);
+    // 강제로 로딩 상태를 5초 후에 해제 (무한 로딩 방지)
+    const forceStopLoading = () => {
+      timeoutId = setTimeout(() => {
+        if (mounted) {
+          console.warn("⚠️ 강제 로딩 해제 (5초 타임아웃)");
+          setLoading(false);
+        }
+      }, 5000);
     };
 
+    const getUser = async () => {
+      try {
+        console.log("🔄 사용자 정보 조회 시작");
+
+        const {
+          data: { user: authUser },
+          error: authError,
+        } = await supabase.auth.getUser();
+
+        if (authError) {
+          console.error("❌ Auth 에러:", authError);
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (authUser && mounted) {
+          console.log("👤 인증된 사용자 발견:", authUser.id);
+
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", authUser.id)
+            .single();
+
+          if (userError) {
+            console.error("❌ 사용자 데이터 조회 에러:", userError);
+            // 에러가 있어도 로딩은 해제
+            if (mounted) {
+              setUser(null);
+              setLoading(false);
+            }
+          } else {
+            console.log("✅ 사용자 데이터 조회 성공");
+            if (mounted) {
+              setUser(userData);
+              setLoading(false);
+            }
+          }
+        } else {
+          console.log("🚫 인증되지 않은 상태");
+          if (mounted) {
+            setUser(null);
+            setLoading(false);
+          }
+        }
+      } catch (error) {
+        console.error("💥 예상치 못한 에러:", error);
+        if (mounted) {
+          setUser(null);
+          setLoading(false);
+        }
+      }
+    };
+
+    // 타임아웃 시작
+    forceStopLoading();
+
+    // 사용자 정보 조회
     getUser();
 
     // 인증 상태 변화 감지
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
+      if (!mounted) return;
 
-        setUser(userData);
-      } else {
+      console.log("🔄 Auth 상태 변화:", event);
+
+      // 타임아웃 클리어
+      if (timeoutId) clearTimeout(timeoutId);
+
+      try {
+        if (session?.user) {
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", session.user.id)
+            .single();
+
+          if (userError) {
+            console.error(
+              "❌ Auth 상태 변화 시 사용자 데이터 에러:",
+              userError,
+            );
+            setUser(null);
+          } else {
+            setUser(userData);
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("💥 Auth 상태 변화 처리 에러:", error);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      subscription?.unsubscribe();
+    };
   }, []);
 
   const signUp = async (
@@ -78,17 +156,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     displayName: string,
   ) => {
     // 1. username 중복 확인
-    const { data: existingUser } = await supabase
+    const { data: existingUser, error: checkError } = await supabase
       .from("users")
       .select("username")
       .eq("username", username)
-      .single();
+      .maybeSingle();
+
+    if (checkError && checkError.code !== "PGRST116") {
+      throw checkError;
+    }
 
     if (existingUser) {
       throw new Error("이미 사용 중인 아이디입니다.");
     }
 
-    // 2. Supabase Auth에 계정 생성 (username을 email 형태로 변환)
+    // 2. Supabase Auth에 계정 생성
     const email = usernameToEmail(username);
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -111,7 +193,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (username: string, password: string) => {
-    // username을 email 형태로 변환해서 로그인
     const email = usernameToEmail(username);
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -129,6 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    setUser(null);
   };
 
   const updateProfile = async (updates: Partial<User>) => {

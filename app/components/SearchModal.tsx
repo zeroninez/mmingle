@@ -6,6 +6,7 @@ import { Search, X, MapPin, Calendar, User as UserIcon } from "lucide-react";
 import { supabase, Post } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { PostCard } from "./PostCard";
+import { useDebounce } from "@/hooks/useDebounce";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 
@@ -35,6 +36,7 @@ export function SearchModal({
 }: SearchModalProps) {
   const { user } = useAuth();
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 300); // 300ms 디바운싱
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTab, setSelectedTab] = useState<
@@ -149,14 +151,14 @@ export function SearchModal({
     }
   };
 
-  // 검색어 변경 시 디바운싱
+  // ✅ 디바운스된 값으로 교체
   useEffect(() => {
-    const timer = setTimeout(() => {
-      performSearch(query);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [query, user]);
+    if (debouncedQuery.trim()) {
+      performSearch(debouncedQuery);
+    } else {
+      setResults([]);
+    }
+  }, [debouncedQuery, user]);
 
   // 필터링된 결과
   const filteredResults = results.filter((result) => {

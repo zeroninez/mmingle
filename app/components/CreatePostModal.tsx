@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import Image from "next/image";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { useDropzone } from "react-dropzone";
 import { X, Upload, MapPin, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -254,12 +254,13 @@ export function CreatePostModal({
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0 overflow-hidden">
                 {user?.avatar_url ? (
-                  <Image
+                  <OptimizedImage
                     src={user.avatar_url}
                     alt={user.display_name || user.username}
                     width={40}
                     height={40}
                     className="w-full h-full object-cover"
+                    priority={true}
                   />
                 ) : (
                   <div className="w-full h-full bg-lime-100 flex items-center justify-center text-lime-600 font-semibold">
@@ -317,12 +318,13 @@ export function CreatePostModal({
                 <div className="grid grid-cols-3 gap-2 mt-3">
                   {previewUrls.map((url, index) => (
                     <div key={index} className="relative">
-                      <Image
+                      <OptimizedImage
                         src={url}
                         alt={`미리보기 ${index + 1}`}
-                        width={100}
-                        height={100}
-                        className="w-full h-20 object-cover rounded-lg"
+                        width={150}
+                        height={150}
+                        className="w-full h-24 object-cover rounded"
+                        priority={false}
                       />
                       {!loading && (
                         <button

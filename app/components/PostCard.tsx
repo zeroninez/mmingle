@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 import {
@@ -215,7 +215,7 @@ export function PostCard({
             className={`bg-gray-300 rounded-full flex-shrink-0 overflow-hidden ${compact ? "w-8 h-8" : "w-10 h-10"}`}
           >
             {post.user?.avatar_url ? (
-              <Image
+              <OptimizedImage
                 src={post.user.avatar_url}
                 alt={post.user.display_name || post.user.username}
                 width={compact ? 32 : 40}
@@ -283,7 +283,7 @@ export function PostCard({
             .slice(0, compact ? 2 : 4) // compact 모드에서는 2개만
             .map((image, index) => (
               <div key={image.id} className="relative">
-                <Image
+                <OptimizedImage
                   src={image.image_url}
                   alt={`포스트 이미지 ${index + 1}`}
                   width={300}
@@ -291,7 +291,9 @@ export function PostCard({
                   className={`w-full object-cover rounded-lg ${
                     post.images!.length === 1 ? "max-h-64" : "h-32"
                   }`}
+                  priority={index < 2} // 첫 2개 이미지는 우선 로드
                 />
+
                 {/* 더 많은 이미지가 있을 때 표시 */}
                 {!compact && index === 3 && post.images!.length > 4 && (
                   <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
@@ -349,7 +351,7 @@ export function PostCard({
             <form onSubmit={handleComment} className="flex gap-3">
               <div className="w-8 h-8 bg-gray-300 rounded-full flex-shrink-0 overflow-hidden">
                 {user.avatar_url ? (
-                  <Image
+                  <OptimizedImage
                     src={user.avatar_url}
                     alt={user.display_name || user.username}
                     width={32}
@@ -399,7 +401,7 @@ export function PostCard({
                 <div key={comment.id} className="flex gap-3">
                   <div className="w-8 h-8 bg-gray-300 rounded-full flex-shrink-0 overflow-hidden">
                     {comment.user?.avatar_url ? (
-                      <Image
+                      <OptimizedImage
                         src={comment.user.avatar_url}
                         alt={comment.user.display_name || comment.user.username}
                         width={32}
