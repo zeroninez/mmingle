@@ -286,11 +286,9 @@ export function PostCard({
                 <OptimizedImage
                   src={image.image_url}
                   alt={`포스트 이미지 ${index + 1}`}
-                  width={300}
-                  height={200}
-                  className={`w-full object-cover rounded-lg ${
-                    post.images!.length === 1 ? "max-h-64" : "h-32"
-                  }`}
+                  // className={`w-full object-cover rounded-lg ${
+                  //   post.images!.length === 1 ? "max-h-64" : "h-32"
+                  // }`}
                   priority={index < 2} // 첫 2개 이미지는 우선 로드
                 />
 

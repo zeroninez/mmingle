@@ -1,7 +1,14 @@
-// contexts/AuthContext.tsx
+// app/contexts/AuthContext.tsx - 수정된 버전
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase, User } from "@/lib/supabase";
 
@@ -26,129 +33,121 @@ const usernameToEmail = (username: string) => `${username}@app.local`;
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+  const mountedRef = useRef(true);
+  const initializingRef = useRef(false);
+
+  // 안전한 상태 업데이트 함수
+  const safeSetUser = useCallback((userData: User | null) => {
+    if (mountedRef.current) {
+      setUser(userData);
+    }
+  }, []);
+
+  const safeSetLoading = useCallback((loadingState: boolean) => {
+    if (mountedRef.current) {
+      setLoading(loadingState);
+    }
+  }, []);
+
+  // 사용자 데이터 가져오기 함수
+  const fetchUserData = useCallback(
+    async (authUser: SupabaseUser): Promise<User | null> => {
+      try {
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", authUser.id)
+          .single();
+
+        if (userError) {
+          console.error("❌ 사용자 데이터 조회 에러:", userError);
+          return null;
+        }
+
+        console.log("✅ 사용자 데이터 조회 성공");
+        return userData;
+      } catch (error) {
+        console.error("💥 사용자 데이터 가져오기 에러:", error);
+        return null;
+      }
+    },
+    [],
+  );
+
+  // 초기화 함수
+  const initializeAuth = useCallback(async () => {
+    if (initializingRef.current) return;
+    initializingRef.current = true;
+
+    try {
+      console.log("🔄 Auth 초기화 시작");
+
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError) {
+        console.error("❌ Auth 에러:", authError);
+        safeSetUser(null);
+        return;
+      }
+
+      if (authUser) {
+        console.log("👤 인증된 사용자 발견:", authUser.id);
+        const userData = await fetchUserData(authUser);
+        safeSetUser(userData);
+      } else {
+        console.log("🚫 인증되지 않은 상태");
+        safeSetUser(null);
+      }
+    } catch (error) {
+      console.error("💥 Auth 초기화 에러:", error);
+      safeSetUser(null);
+    } finally {
+      safeSetLoading(false);
+      setInitialized(true);
+      initializingRef.current = false;
+    }
+  }, [fetchUserData, safeSetUser, safeSetLoading]);
 
   useEffect(() => {
-    let mounted = true;
-    let timeoutId: NodeJS.Timeout;
+    mountedRef.current = true;
 
-    // 강제로 로딩 상태를 5초 후에 해제 (무한 로딩 방지)
-    const forceStopLoading = () => {
-      timeoutId = setTimeout(() => {
-        if (mounted) {
-          console.warn("⚠️ 강제 로딩 해제 (5초 타임아웃)");
-          setLoading(false);
-        }
-      }, 5000);
-    };
-
-    const getUser = async () => {
-      try {
-        console.log("🔄 사용자 정보 조회 시작");
-
-        const {
-          data: { user: authUser },
-          error: authError,
-        } = await supabase.auth.getUser();
-
-        if (authError) {
-          console.error("❌ Auth 에러:", authError);
-          if (mounted) {
-            setUser(null);
-            setLoading(false);
-          }
-          return;
-        }
-
-        if (authUser && mounted) {
-          console.log("👤 인증된 사용자 발견:", authUser.id);
-
-          const { data: userData, error: userError } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", authUser.id)
-            .single();
-
-          if (userError) {
-            console.error("❌ 사용자 데이터 조회 에러:", userError);
-            // 에러가 있어도 로딩은 해제
-            if (mounted) {
-              setUser(null);
-              setLoading(false);
-            }
-          } else {
-            console.log("✅ 사용자 데이터 조회 성공");
-            if (mounted) {
-              setUser(userData);
-              setLoading(false);
-            }
-          }
-        } else {
-          console.log("🚫 인증되지 않은 상태");
-          if (mounted) {
-            setUser(null);
-            setLoading(false);
-          }
-        }
-      } catch (error) {
-        console.error("💥 예상치 못한 에러:", error);
-        if (mounted) {
-          setUser(null);
-          setLoading(false);
-        }
-      }
-    };
-
-    // 타임아웃 시작
-    forceStopLoading();
-
-    // 사용자 정보 조회
-    getUser();
+    // 초기화 시작
+    initializeAuth();
 
     // 인증 상태 변화 감지
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
+      if (!mountedRef.current) return;
 
       console.log("🔄 Auth 상태 변화:", event);
 
-      // 타임아웃 클리어
-      if (timeoutId) clearTimeout(timeoutId);
-
       try {
         if (session?.user) {
-          const { data: userData, error: userError } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-
-          if (userError) {
-            console.error(
-              "❌ Auth 상태 변화 시 사용자 데이터 에러:",
-              userError,
-            );
-            setUser(null);
-          } else {
-            setUser(userData);
-          }
+          const userData = await fetchUserData(session.user);
+          safeSetUser(userData);
         } else {
-          setUser(null);
+          safeSetUser(null);
         }
       } catch (error) {
         console.error("💥 Auth 상태 변화 처리 에러:", error);
-        setUser(null);
+        safeSetUser(null);
       } finally {
-        setLoading(false);
+        if (initialized) {
+          safeSetLoading(false);
+        }
       }
     });
 
     return () => {
-      mounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
+      mountedRef.current = false;
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [initializeAuth, fetchUserData, safeSetUser, safeSetLoading, initialized]);
 
   const signUp = async (
     username: string,
@@ -210,7 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    setUser(null);
+    safeSetUser(null);
   };
 
   const updateProfile = async (updates: Partial<User>) => {
@@ -223,7 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) throw error;
 
-    setUser({ ...user, ...updates });
+    safeSetUser({ ...user, ...updates });
   };
 
   return (

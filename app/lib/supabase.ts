@@ -1,11 +1,32 @@
+// app/lib/supabase.ts - 수정된 버전
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// 브라우저 호환성을 위한 설정 추가
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: "mmingle-auth-token", // 고유한 키로 변경
+    storage: typeof window !== "undefined" ? window.localStorage : undefined,
+    flowType: "pkce", // PKCE 플로우 사용
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+  global: {
+    headers: {
+      apikey: supabaseAnonKey,
+    },
+  },
+});
 
-// 타입 정의
+// 타입 정의는 그대로 유지
 export interface User {
   id: string;
   email: string;
