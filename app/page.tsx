@@ -525,8 +525,7 @@ function HomePageContent() {
                   {/* 검색 결과 표시 */}
                   {debouncedSearch.trim() && (
                     <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg">
-                      <strong>{debouncedSearch}</strong>에 대한 검색 결과 (
-                      {posts.length}개)
+                      "{debouncedSearch}"에 대한 검색 결과 ({posts.length}개)
                       <button
                         onClick={() => {
                           setSearchQuery("");
